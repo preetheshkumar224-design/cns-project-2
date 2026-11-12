@@ -233,6 +233,22 @@ svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width:
 .lab-button { width: 100%; margin-top: 10px; }
 .verification-note { display: flex; align-items: center; gap: 7px; margin-top: 14px; color: #428e7a; font-size: 10px; }
 .verification-note svg { width: 14px; height: 14px; }
+.sdes-trace-card { padding: 21px; }
+.sdes-trace-panel { display: grid; gap: 12px; }
+.trace-key,
+.trace-line,
+.trace-flow { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border: 1px solid #edf2f8; border-radius: 9px; background: #f9fbff; }
+.trace-key strong,
+.trace-line strong,
+.trace-flow strong { color: #40546d; font-family: Consolas,"SFMono-Regular",monospace; font-size: 10px; letter-spacing: .5px; }
+.trace-key { padding: 12px 14px; background: #eef6ff; }
+.trace-key .trace-label,
+.trace-line span,
+.trace-flow span { color: #8a9aa9; font-size: 9px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; }
+.trace-line strong,
+.trace-flow strong { text-align: right; }
+.trace-flow { background: #f5fbf8; }
+.trace-flow strong { color: #2d6b5d; }
 .performance-card { padding: 21px; }
 .performance-icon { width: 21px; height: 21px; color: #8899af; }
 .performance-row { display: grid; grid-template-columns: minmax(130px,1fr) minmax(85px,.58fr) minmax(85px,.58fr); gap: 12px; align-items: center; padding: 18px 4px; border-top: 1px solid #edf0f4; }

@@ -9,7 +9,6 @@ import time
 import uuid
 from pathlib import Path
 
-from cryptography.fernet import Fernet, InvalidToken
 from flask import Flask, g, jsonify, render_template, request, session
 
 
@@ -95,14 +94,29 @@ def _persistent_secret(path, factory=None):
     return path.read_bytes()
 
 
-def _encrypted_patient(fernet, patient):
-    return fernet.encrypt(json.dumps(patient, separators=(",", ":")).encode("utf-8"))
+def _sdes_key_for_secret(secret):
+    if isinstance(secret, str):
+        secret_bytes = secret.encode("utf-8")
+    elif isinstance(secret, (bytes, bytearray)):
+        secret_bytes = bytes(secret)
+    else:
+        secret_bytes = str(secret).encode("utf-8")
+    digest = hashlib.sha256(secret_bytes).digest()
+    return "".join(format(byte, "08b") for byte in digest)[:10]
 
 
-def _decrypt_patient(fernet, value):
+def _encrypted_patient(secret, patient):
+    key = _sdes_key_for_secret(secret)
+    payload = json.dumps(patient, separators=(",", ":")).encode("utf-8")
+    return bytes(sdes_crypt_byte(value, key) for value in payload)
+
+
+def _decrypt_patient(secret, value):
+    key = _sdes_key_for_secret(secret)
     try:
-        return json.loads(fernet.decrypt(value).decode("utf-8"))
-    except (InvalidToken, UnicodeDecodeError, json.JSONDecodeError) as error:
+        decrypted = bytes(sdes_crypt_byte(byte, key, decrypt=True) for byte in value)
+        return json.loads(decrypted.decode("utf-8"))
+    except (TypeError, ValueError, UnicodeDecodeError, json.JSONDecodeError) as error:
         raise RuntimeError("A patient record could not be decrypted; check the encryption key.") from error
 
 
@@ -149,7 +163,7 @@ def create_app(test_config=None):
     app.config.from_mapping(
         DATABASE=str(INSTANCE_DIR / "patients.sqlite3"),
         SECRET_KEY=_persistent_secret(INSTANCE_DIR / "session.secret"),
-        ENCRYPTION_KEY=_persistent_secret(INSTANCE_DIR / "records.key", Fernet.generate_key),
+        ENCRYPTION_KEY=_persistent_secret(INSTANCE_DIR / "records.key", lambda: secrets.token_bytes(32)),
         DEMO_DATA=os.environ.get("DEMO_DATA", "true").lower() == "true",
         JSON_SORT_KEYS=False,
         SESSION_COOKIE_HTTPONLY=True,
@@ -158,7 +172,6 @@ def create_app(test_config=None):
     )
     if test_config:
         app.config.update(test_config)
-    app.fernet = Fernet(app.config["ENCRYPTION_KEY"])
     logging.basicConfig(level=logging.INFO)
 
     def connect_db():
@@ -218,7 +231,7 @@ def create_app(test_config=None):
             }
             connection.execute(
                 "INSERT INTO patients VALUES (?, ?)",
-                (patient_id, _encrypted_patient(app.fernet, record)),
+                (patient_id, _encrypted_patient(app.config["ENCRYPTION_KEY"], record)),
             )
             connection.execute(
                 "INSERT INTO accounts VALUES (?, ?, ?, ?, ?)",
@@ -325,7 +338,7 @@ def create_app(test_config=None):
         search = request.args.get("q", "").strip().casefold()
         patients = []
         for row in records:
-            record = _decrypt_patient(app.fernet, row["encrypted_record"])
+            record = _decrypt_patient(app.config["ENCRYPTION_KEY"], row["encrypted_record"])
             if not search or search in " ".join(
                 str(record.get(key, "")) for key in ("firstName", "lastName", "diagnosis")
             ).casefold():
@@ -350,7 +363,7 @@ def create_app(test_config=None):
         try:
             g.db.execute(
                 "INSERT INTO patients VALUES (?, ?)",
-                (patient_id, _encrypted_patient(app.fernet, record)),
+                (patient_id, _encrypted_patient(app.config["ENCRYPTION_KEY"], record)),
             )
             g.db.execute(
                 "INSERT INTO accounts VALUES (?, ?, ?, 'patient', ?)",
@@ -375,7 +388,7 @@ def create_app(test_config=None):
         if row is None:
             return error("Patient record not found.", 404)
         return jsonify(patient={"id": patient_id, **_decrypt_patient(
-            app.fernet, row["encrypted_record"]
+            app.config["ENCRYPTION_KEY"], row["encrypted_record"]
         )})
 
     @app.put("/api/patients/<patient_id>")
@@ -394,7 +407,7 @@ def create_app(test_config=None):
             return error(str(validation_error))
         g.db.execute(
             "UPDATE patients SET encrypted_record = ? WHERE id = ?",
-            (_encrypted_patient(app.fernet, record), patient_id),
+            (_encrypted_patient(app.config["ENCRYPTION_KEY"], record), patient_id),
         )
         g.db.commit()
         return jsonify(patient={"id": patient_id, **record})
@@ -473,17 +486,9 @@ def create_app(test_config=None):
         start = time.perf_counter()
         bytes(sdes_crypt_byte(value, key, decrypt=True) for value in encrypted)
         sdes_decryption_ms = (time.perf_counter() - start) * 1000
-        start = time.perf_counter()
-        token = app.fernet.encrypt(sample)
-        fernet_encryption_ms = (time.perf_counter() - start) * 1000
-        start = time.perf_counter()
-        app.fernet.decrypt(token)
-        fernet_decryption_ms = (time.perf_counter() - start) * 1000
         return jsonify(sampleBytes=len(sample), timings={
             "S-DES": {"encryptMs": round(sdes_encryption_ms, 4),
                       "decryptMs": round(sdes_decryption_ms, 4)},
-            "Fernet": {"encryptMs": round(fernet_encryption_ms, 4),
-                       "decryptMs": round(fernet_decryption_ms, 4)},
         })
 
     @app.errorhandler(500)

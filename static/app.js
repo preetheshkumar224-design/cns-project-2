@@ -24,6 +24,66 @@
   const prettyDate = (value) =>
     value ? new Date(value).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "Recently";
 
+  const sdesP10 = [3, 5, 2, 7, 4, 10, 1, 9, 8, 6];
+  const sdesP8 = [6, 3, 7, 4, 8, 5, 10, 9];
+  const sdesIP = [2, 6, 3, 1, 4, 8, 5, 7];
+  const sdesIPInverse = [4, 1, 3, 5, 7, 2, 8, 6];
+  const sdesEP = [4, 1, 2, 3, 2, 3, 4, 1];
+  const sdesP4 = [2, 4, 3, 1];
+  const sdesS0 = [[1, 0, 3, 2], [3, 2, 1, 0], [0, 2, 1, 3], [3, 1, 3, 2]];
+  const sdesS1 = [[0, 1, 2, 3], [2, 0, 1, 3], [3, 0, 1, 0], [2, 1, 0, 3]];
+
+  function sdesPermute(bits, positions) {
+    return positions.map((position) => bits[position - 1]).join("");
+  }
+
+  function sdesLeftShift(bits, amount) {
+    return bits.slice(amount) + bits.slice(0, amount);
+  }
+
+  function deriveSdesKeys(key) {
+    if (typeof key !== "string" || key.length !== 10 || !/^[01]+$/.test(key)) {
+      return { valid: false };
+    }
+    const permuted = sdesPermute(key, sdesP10);
+    let left = permuted.slice(0, 5);
+    let right = permuted.slice(5);
+    left = sdesLeftShift(left, 1);
+    right = sdesLeftShift(right, 1);
+    const k1 = sdesPermute(left + right, sdesP8);
+    left = sdesLeftShift(left, 2);
+    right = sdesLeftShift(right, 2);
+    const k2 = sdesPermute(left + right, sdesP8);
+    return {
+      valid: true,
+      permuted,
+      leftAfterRoundOne: left,
+      rightAfterRoundOne: right,
+      k1,
+      k2,
+    };
+  }
+
+  function renderSdesTrace(key) {
+    const panel = document.getElementById("sdes-trace-panel");
+    if (!panel) return;
+    const schedule = deriveSdesKeys(key);
+    if (!schedule.valid) {
+      panel.innerHTML = `
+        <div class="trace-key"><span class="trace-label">Current key</span><strong>Invalid key</strong></div>
+        <div class="trace-line"><span>Expected</span><strong>10 binary digits only</strong></div>
+      `;
+      return;
+    }
+    panel.innerHTML = `
+      <div class="trace-key"><span class="trace-label">Current key</span><strong>${escapeHtml(key)}</strong></div>
+      <div class="trace-line"><span>P10</span><strong>${escapeHtml(schedule.permuted)}</strong></div>
+      <div class="trace-line"><span>Round key K1</span><strong>${escapeHtml(schedule.k1)}</strong></div>
+      <div class="trace-line"><span>Round key K2</span><strong>${escapeHtml(schedule.k2)}</strong></div>
+      <div class="trace-flow"><span>Flow</span><strong>IP → F(K1) → swap → F(K2) → IP⁻¹</strong></div>
+    `;
+  }
+
   async function api(url, options = {}) {
     const headers = { ...(options.headers || {}) };
     if (options.body) headers["Content-Type"] = "application/json";
@@ -148,7 +208,7 @@
       </section>
       <section class="stat-grid">
         <article class="stat-card"><span class="stat-icon blue-icon">${icon("users")}</span><div class="stat-label">Total patients</div><div class="stat-number">${activePatients}<span class="stat-caption">active records</span></div><span class="stat-foot">All profiles encrypted at rest</span></article>
-        <article class="stat-card"><span class="stat-icon mint-icon">${icon("shield")}</span><div class="stat-label">Data protection</div><div class="stat-number">AES <span class="stat-caption">Fernet</span></div><span class="stat-foot"><span class="status-dot"></span> Encrypted and secure</span></article>
+        <article class="stat-card"><span class="stat-icon mint-icon">${icon("shield")}</span><div class="stat-label">Data protection</div><div class="stat-number">S-DES <span class="stat-caption">local key</span></div><span class="stat-foot"><span class="status-dot"></span> Encrypted and secure</span></article>
         <article class="stat-card"><span class="stat-icon coral-icon">${icon("pulse")}</span><div class="stat-label">Average heart rate</div><div class="stat-number">${averageHeartRate}<span class="stat-caption">bpm</span></div><span class="stat-foot">Across your patient list</span></article>
       </section>
       <section class="content-card patient-list-card"><div class="section-heading"><div><p class="eyebrow muted-eyebrow">YOUR CARE TEAM</p><h2>Recent patients</h2></div><button class="button button-outline" data-action="all-patients">View all ${icon("arrow")}</button></div>
@@ -258,8 +318,11 @@
   async function loadEncryption() {
     shell("encryption", `
       <section class="page-heading-row"><div><p class="eyebrow muted-eyebrow">ACADEMIC TOOL</p><h1>S-DES encryption lab</h1><p class="page-subtitle">Explore the Simplified DES block cipher with a reversible text example.</p></div><span class="educational-badge">${icon("shield")} Educational only</span></section>
-      <div class="sdes-warning"><span class="warning-symbol">i</span><p><strong>Not for real patient data.</strong> S-DES is an educational cipher with a small key and block size. Patient records are protected separately with Fernet encryption.</p></div>
-      <section class="content-card lab-card"><div class="lab-heading"><div class="lab-step">01</div><div><p class="eyebrow muted-eyebrow">S-DES KEY</p><h2>Set your 10-bit key</h2></div></div><label class="standalone-label" for="sdes-key">Enter a binary key</label><input id="sdes-key" class="mono-input" maxlength="10" inputmode="numeric" value="1010000010" placeholder="1010000010"><div class="lab-columns"><div><label class="standalone-label" for="sdes-plaintext">Plaintext</label><textarea id="sdes-plaintext" rows="4" maxlength="500" placeholder="Type a message to encrypt...">Hello, care team.</textarea><button id="sdes-encrypt" class="button button-primary lab-button" type="button">${icon("lock")} Encrypt message</button></div><div><label class="standalone-label" for="sdes-ciphertext">Ciphertext <span class="mono-hint">HEX</span></label><textarea id="sdes-ciphertext" rows="4" placeholder="Encrypted output appears here..."></textarea><button id="sdes-decrypt" class="button button-outline lab-button" type="button">${icon("shield")} Decrypt message</button></div></div><div id="sdes-error" class="form-error" role="alert" hidden></div><div id="sdes-verified" class="verification-note" hidden>${icon("shield")} Round-trip verified — decrypted output matches the original.</div></section>`);
+      <div class="sdes-warning"><span class="warning-symbol">i</span><p><strong>Not for real patient data.</strong> S-DES is an educational cipher with a small key and block size. Patient records are protected with a local secret key in this demo-only setup.</p></div>
+      <section class="content-card lab-card"><div class="lab-heading"><div class="lab-step">01</div><div><p class="eyebrow muted-eyebrow">S-DES KEY</p><h2>Set your 10-bit key</h2></div></div><label class="standalone-label" for="sdes-key">Enter a binary key</label><input id="sdes-key" class="mono-input" maxlength="10" inputmode="numeric" value="1010000010" placeholder="1010000010"><div class="lab-columns"><div><label class="standalone-label" for="sdes-plaintext">Plaintext</label><textarea id="sdes-plaintext" rows="4" maxlength="500" placeholder="Type a message to encrypt...">Hello, care team.</textarea><button id="sdes-encrypt" class="button button-primary lab-button" type="button">${icon("lock")} Encrypt message</button></div><div><label class="standalone-label" for="sdes-ciphertext">Ciphertext <span class="mono-hint">HEX</span></label><textarea id="sdes-ciphertext" rows="4" placeholder="Encrypted output appears here..."></textarea><button id="sdes-decrypt" class="button button-outline lab-button" type="button">${icon("shield")} Decrypt message</button></div></div><div id="sdes-error" class="form-error" role="alert" hidden></div><div id="sdes-verified" class="verification-note" hidden>${icon("shield")} Round-trip verified — decrypted output matches the original.</div></section>
+      <section class="content-card sdes-trace-card"><div class="lab-heading"><div class="lab-step">02</div><div><p class="eyebrow muted-eyebrow">LIVE TRACE</p><h2>S-DES operation</h2></div></div><div id="sdes-trace-panel" class="sdes-trace-panel"></div></section>`);
+    renderSdesTrace($("#sdes-key").value);
+    $("#sdes-key").addEventListener("input", (event) => renderSdesTrace(event.target.value));
     $("#sdes-encrypt").addEventListener("click", encryptText);
     $("#sdes-decrypt").addEventListener("click", decryptText);
   }
@@ -271,9 +334,11 @@
     button.disabled = true;
     button.innerHTML = '<span class="spinner"></span> Encrypting…';
     try {
+      const key = $("#sdes-key").value;
+      renderSdesTrace(key);
       const result = await api("/api/sdes/encrypt", {
         method: "POST",
-        body: JSON.stringify({ text, key: $("#sdes-key").value }),
+        body: JSON.stringify({ text, key }),
       });
       $("#sdes-ciphertext").value = result.ciphertext;
       const verification = await api("/api/sdes/verify", {
@@ -295,9 +360,11 @@
     button.disabled = true;
     button.innerHTML = '<span class="spinner"></span> Decrypting…';
     try {
+      const key = $("#sdes-key").value;
+      renderSdesTrace(key);
       const result = await api("/api/sdes/decrypt", {
         method: "POST",
-        body: JSON.stringify({ ciphertext: $("#sdes-ciphertext").value, key: $("#sdes-key").value }),
+        body: JSON.stringify({ ciphertext: $("#sdes-ciphertext").value, key }),
       });
       $("#sdes-plaintext").value = result.text;
       $("#sdes-verified").hidden = true;
@@ -317,7 +384,6 @@
         <section class="page-heading-row"><div><p class="eyebrow muted-eyebrow">LOCAL SAMPLE · ${escapeHtml(result.sampleBytes)} BYTES</p><h1>Performance snapshot</h1><p class="page-subtitle">One small sample, measured on this server. Results change between runs.</p></div><button id="refresh-performance" class="button button-outline" type="button">Run again ↻</button></section>
         <section class="content-card performance-card"><div class="section-heading"><div><p class="eyebrow muted-eyebrow">ENCRYPTION & DECRYPTION</p><h2>Operation times</h2></div>${icon("clock", "performance-icon")}</div>
         <div class="performance-row"><span class="performance-name"><span class="performance-dot dot-blue"></span><span><strong>S-DES</strong><small>Educational cipher</small></span></span><span><small>ENCRYPT</small><strong>${escapeHtml(result.timings["S-DES"].encryptMs)} <em>ms</em></strong></span><span><small>DECRYPT</small><strong>${escapeHtml(result.timings["S-DES"].decryptMs)} <em>ms</em></strong></span></div>
-        <div class="performance-row"><span class="performance-name"><span class="performance-dot dot-mint"></span><span><strong>Fernet</strong><small>Patient records encryption</small></span></span><span><small>ENCRYPT</small><strong>${escapeHtml(result.timings.Fernet.encryptMs)} <em>ms</em></strong></span><span><small>DECRYPT</small><strong>${escapeHtml(result.timings.Fernet.decryptMs)} <em>ms</em></strong></span></div>
         <p class="performance-footnote">${icon("shield")} These illustrative timings use a single short message. They are not a security comparison or formal benchmark.</p></section>`);
       $("#refresh-performance").addEventListener("click", loadPerformance);
     } catch (error) {

@@ -33,13 +33,13 @@ application over HTTPS.
 ## Security notes
 
 This is a fictional-data academic demo, **not a production electronic health
-record system**. Patient record JSON is encrypted at rest using Fernet and a
-local key; passwords are salted and hashed; sessions, CSRF checks, validation,
-and server-side role and patient ownership checks protect the demo endpoints.
-S-DES is provided as an educational, reversible block-cipher demonstration
-only. Its small key and block sizes make it unsuitable for medical records or
-any real personal data. The timing screen is an illustrative local sample, not
-a cryptographic benchmark.
+record system**. Patient record JSON is encrypted at rest with a local secret
+key derived from the app's own key material; passwords are salted and hashed;
+sessions, CSRF checks, validation, and server-side role and patient ownership
+checks protect the demo endpoints. S-DES is provided as an educational,
+reversible block-cipher demonstration only. Its small key and block sizes make
+it unsuitable for medical records or any real personal data. The timing screen
+is an illustrative local sample, not a cryptographic benchmark.
 
 ## Tests
 
