@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token }}">
-    <meta name="theme-color" content="#f5f8fc">
+    <meta name="theme-color" content="#07152d">
     <title>MedSecure — Patient care, protected</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
     <script defer src="{{ url_for('static', filename='app.js') }}"></script>
@@ -26,42 +26,61 @@
       <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></symbol>
       <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14m-7-7 7 7-7 7"/></symbol>
     </svg>
-    <div class="ambient ambient-one" aria-hidden="true">✳</div>
-    <div class="ambient ambient-two" aria-hidden="true">✚</div>
+    <div class="landing-ambient landing-ambient-one" aria-hidden="true"></div>
+    <div class="landing-ambient landing-ambient-two" aria-hidden="true"></div>
     <main id="login-view" class="login-layout">
-      <section class="login-story">
-        <div class="brand brand-light"><span class="brand-mark"><svg><use href="#i-heart"/></svg></span><span>medsecure<span class="brand-dot">.</span></span></div>
-        <div class="story-copy">
-          <span class="eyebrow"><span class="pulse-dot"></span> A calmer way to care</span>
-          <h1>Better care starts<br>with <span>trust.</span></h1>
-          <p>Thoughtful health management, with the security your patients deserve.</p>
+      <header class="landing-header">
+        <a class="brand brand-light" href="#home" aria-label="MedSecure home"><span class="brand-mark"><svg><use href="#i-heart"/></svg></span><span>MedSecure<span class="brand-dot">.</span></span></a>
+        <nav class="landing-nav" aria-label="Main navigation">
+          <a href="#about">About Us</a><a href="#features">Features</a><a href="#security">Security</a><a href="#support">Support</a>
+        </nav>
+        <a class="button button-contact" href="#support">Contact Us <svg><use href="#i-arrow"/></svg></a>
+      </header>
+      <section id="home" class="hero-section">
+        <div class="hero-copy reveal">
+          <p class="hero-eyebrow"><span class="pulse-dot"></span> CARE, CONNECTED & PROTECTED</p>
+          <h1>SECURE<br>HEALTHCARE<br><span>REIMAGINED.</span></h1>
+          <p class="hero-description">Your health records deserve more than storage. They deserve protection. Experience smarter patient management with privacy at its core.</p>
+          <div class="hero-actions"><a class="button button-primary hero-primary" href="#account-selection">Get Started <svg><use href="#i-arrow"/></svg></a><a class="button hero-secondary" href="#security"><svg><use href="#i-shield"/></svg> Explore Security</a></div>
+          <div class="hero-trust"><span><svg><use href="#i-lock"/></svg> Privacy first</span><i></i><span>Built for better care</span></div>
         </div>
-        <div class="heartbeat-wrap" aria-hidden="true"><div class="heartbeat-caption"><svg><use href="#i-heart"/></svg><span>Care in sync</span></div><svg class="heartbeat-line" viewBox="0 0 500 110" preserveAspectRatio="none"><path class="heartbeat-path" d="M0 56 H112 L130 56 L147 30 L169 84 L193 9 L220 100 L242 55 H500"/></svg></div>
-        <div class="story-foot"><span>✦</span> Thoughtfully designed for modern care</div>
+        <div class="hero-art reveal" aria-label="Illustration of a protected heart" role="img">
+          <div class="art-glow"></div><div class="art-ring art-ring-one"></div><div class="art-ring art-ring-two"></div>
+          <div class="art-orbit orbit-a"></div><div class="art-orbit orbit-b"></div>
+          <div class="medical-shield">
+            <svg viewBox="0 0 300 340" aria-hidden="true">
+              <defs>
+                <linearGradient id="shield-fill" x1="0" x2="1" y1="0" y2="1"><stop stop-color="#7edaff" stop-opacity=".92"/><stop offset="1" stop-color="#386df5" stop-opacity=".9"/></linearGradient>
+                <linearGradient id="heart-fill" x1="0" x2="1"><stop stop-color="#fff"/><stop offset="1" stop-color="#87eaff"/></linearGradient>
+                <filter id="shield-shadow" x="-.5" y="-.4" width="2" height="2"><feGaussianBlur stdDeviation="10"/></filter>
+              </defs>
+              <path d="M150 14 266 57v87c0 80-51 138-116 178C85 282 34 224 34 144V57z" fill="#4499ff" opacity=".3" filter="url(#shield-shadow)"/>
+              <path d="M150 20 258 60v82c0 73-47 127-108 164-61-37-108-91-108-164V60z" fill="url(#shield-fill)" fill-opacity=".12" stroke="#a9ecff" stroke-width="2.5"/>
+              <path d="M150 39 240 72v69c0 61-38 107-90 140-52-33-90-79-90-140V72z" fill="url(#shield-fill)" fill-opacity=".1" stroke="#74caff" stroke-opacity=".5"/>
+              <path d="M150 212s-58-34-58-74c0-34 40-48 58-17 18-31 58-17 58 17 0 40-58 74-58 74Z" fill="url(#heart-fill)" fill-opacity=".92" stroke="white" stroke-width="2"/>
+              <path d="M98 144h28l12-21 17 44 14-27 9 10h23" fill="none" stroke="#2466ce" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <div class="art-badge badge-encrypted"><span class="badge-icon"><svg><use href="#i-lock"/></svg></span><span><strong>Always encrypted</strong><small>Private by design</small></span></div>
+          <div class="art-badge badge-care"><span class="care-pulse">+</span><span><strong>Care in sync</strong><small>Trusted access</small></span></div>
+          <span class="art-spark spark-one">✦</span><span class="art-spark spark-two">✧</span>
+        </div>
+        <a class="scroll-cue" href="#account-selection"><span></span> SCROLL TO EXPLORE</a>
       </section>
-      <section class="login-panel">
-        <section id="role-selection" class="login-card">
-          <div class="mobile-brand brand"><span class="brand-mark"><svg><use href="#i-heart"/></svg></span><span>medsecure<span class="brand-dot">.</span></span></div>
-          <div class="welcome-icon"><svg><use href="#i-shield"/></svg></div>
-          <p class="eyebrow muted-eyebrow">YOUR HEALTH, IN GOOD HANDS</p>
-          <h2>Welcome to MedSecure</h2>
-          <p class="form-intro">Choose your account type to continue.</p>
+      <section id="account-selection" class="account-section">
+        <div id="role-selection" class="role-selection reveal">
+          <div class="section-heading centered-heading"><p class="section-kicker">YOUR CARE WORKSPACE</p><h2>Care starts with the right connection.</h2><p>Choose your secure space to continue.</p></div>
           <div class="role-choice-grid">
             <button class="role-choice" type="button" data-start-role="doctor">
-              <span class="role-choice-icon"><svg><use href="#i-users"/></svg></span>
-              <span><strong>I'm a doctor</strong><small>Manage your patients and their records</small></span>
-              <svg class="role-choice-arrow"><use href="#i-arrow"/></svg>
+              <span class="role-choice-icon"><svg><use href="#i-users"/></svg></span><span class="role-choice-copy"><strong>Doctor</strong><small>Manage patients and securely access their medical records.</small></span><span class="role-choice-arrow"><svg><use href="#i-arrow"/></svg></span>
             </button>
             <button class="role-choice" type="button" data-start-role="patient">
-              <span class="role-choice-icon"><svg><use href="#i-heart"/></svg></span>
-              <span><strong>I'm a patient</strong><small>View your personal health information</small></span>
-              <svg class="role-choice-arrow"><use href="#i-arrow"/></svg>
+              <span class="role-choice-icon"><svg><use href="#i-heart"/></svg></span><span class="role-choice-copy"><strong>Patient</strong><small>Access your personal health information privately and securely.</small></span><span class="role-choice-arrow"><svg><use href="#i-arrow"/></svg></span>
             </button>
           </div>
           <p class="privacy-note"><svg><use href="#i-lock"/></svg> Your session is private and protected</p>
-        </section>
+        </div>
         <form id="login-form" class="login-card" hidden>
-          <div class="mobile-brand brand"><span class="brand-mark"><svg><use href="#i-heart"/></svg></span><span>medsecure<span class="brand-dot">.</span></span></div>
           <button class="back-to-roles" type="button" data-back-role><svg><use href="#i-arrow"/></svg> Change account type</button>
           <div class="welcome-icon"><svg><use href="#i-shield"/></svg></div>
           <p class="eyebrow muted-eyebrow">YOUR HEALTH, IN GOOD HANDS</p>
@@ -76,8 +95,22 @@
           <div class="login-divider"><span>DEMO ACCOUNTS</span></div>
           <div class="demo-buttons"><button class="demo-button" type="button" data-demo="doctor">Doctor demo <span>↗</span></button><button class="demo-button" type="button" data-demo="patient">Patient demo <span>↗</span></button></div>
         </form>
-        <div class="login-footer">MEDSECURE <span>·</span> PRIVATE BY DESIGN</div>
       </section>
+      <section id="features" class="features-section">
+        <div class="section-heading reveal"><p class="section-kicker">WHY MEDSECURE</p><h2>Every detail, designed<br>around trust.</h2><p>Modern healthcare deserves technology that protects people at every step.</p></div>
+        <div class="feature-grid">
+          <article class="feature-card reveal"><span class="feature-icon"><svg><use href="#i-shield"/></svg></span><h3>Secure Medical Records</h3><p>Keep sensitive health information protected and available to the right people.</p></article>
+          <article class="feature-card reveal"><span class="feature-icon"><svg><use href="#i-heart"/></svg></span><h3>Patient Privacy</h3><p>Private-by-design access keeps personal health details personal.</p></article>
+          <article class="feature-card reveal"><span class="feature-icon"><svg><use href="#i-lock"/></svg></span><h3>Encrypted Data Storage</h3><p>Protect patient records with encrypted storage and secure sessions.</p></article>
+          <article class="feature-card reveal"><span class="feature-icon"><svg><use href="#i-users"/></svg></span><h3>Role-Based Access</h3><p>Doctor and patient experiences are thoughtfully separated and protected.</p></article>
+        </div>
+      </section>
+      <section id="security" class="security-section">
+        <div class="security-visual reveal" aria-hidden="true"><div class="security-glow"></div><div class="security-orbit"></div><div class="security-core"><svg><use href="#i-shield"/></svg><span class="core-check">✓</span></div><span class="security-node node-top"><svg><use href="#i-lock"/></svg></span><span class="security-node node-left"><svg><use href="#i-users"/></svg></span><span class="security-node node-right"><svg><use href="#i-heart"/></svg></span><span class="security-label">SECURE CARE<br>FRAMEWORK</span></div>
+        <div class="security-copy reveal"><p class="section-kicker">SECURITY AT THE CORE</p><h2>Your patients’ trust<br>is never an afterthought.</h2><p>MedSecure combines encrypted data storage, authenticated sessions, and role-based access to help keep sensitive patient information private. Security is built into the way every account connects to care.</p><div class="security-points"><span><svg><use href="#i-lock"/></svg> Encrypted storage</span><span><svg><use href="#i-shield"/></svg> Secure authentication</span><span><svg><use href="#i-users"/></svg> Role-based access</span></div></div>
+      </section>
+      <section id="about" class="about-section reveal"><span class="about-mark"><svg><use href="#i-heart"/></svg></span><p class="section-kicker">ABOUT MEDSECURE</p><h2>Making healthcare information management safer, simpler, and more reliable.</h2><p>Because better care starts with confidence—in every connection, every record, every day.</p></section>
+      <footer id="support" class="landing-footer"><a class="brand brand-light" href="#home"><span class="brand-mark"><svg><use href="#i-heart"/></svg></span><span>MedSecure<span class="brand-dot">.</span></span></a><span>Care, connected and protected.</span><a href="mailto:support@medsecure.example">Support <svg><use href="#i-arrow"/></svg></a><small>© 2026 MedSecure · Private by design</small></footer>
     </main>
     <main id="dashboard-view" class="app-layout" hidden>
       <aside class="sidebar">

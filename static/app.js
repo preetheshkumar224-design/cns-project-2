@@ -320,11 +320,52 @@
       <section class="page-heading-row"><div><p class="eyebrow muted-eyebrow">ACADEMIC TOOL</p><h1>S-DES encryption lab</h1><p class="page-subtitle">Explore the Simplified DES block cipher with a reversible text example.</p></div><span class="educational-badge">${icon("shield")} Educational only</span></section>
       <div class="sdes-warning"><span class="warning-symbol">i</span><p><strong>Not for real patient data.</strong> S-DES is an educational cipher with a small key and block size. Patient records are protected with a local secret key in this demo-only setup.</p></div>
       <section class="content-card lab-card"><div class="lab-heading"><div class="lab-step">01</div><div><p class="eyebrow muted-eyebrow">S-DES KEY</p><h2>Set your 10-bit key</h2></div></div><label class="standalone-label" for="sdes-key">Enter a binary key</label><input id="sdes-key" class="mono-input" maxlength="10" inputmode="numeric" value="1010000010" placeholder="1010000010"><div class="lab-columns"><div><label class="standalone-label" for="sdes-plaintext">Plaintext</label><textarea id="sdes-plaintext" rows="4" maxlength="500" placeholder="Type a message to encrypt...">Hello, care team.</textarea><button id="sdes-encrypt" class="button button-primary lab-button" type="button">${icon("lock")} Encrypt message</button></div><div><label class="standalone-label" for="sdes-ciphertext">Ciphertext <span class="mono-hint">HEX</span></label><textarea id="sdes-ciphertext" rows="4" placeholder="Encrypted output appears here..."></textarea><button id="sdes-decrypt" class="button button-outline lab-button" type="button">${icon("shield")} Decrypt message</button></div></div><div id="sdes-error" class="form-error" role="alert" hidden></div><div id="sdes-verified" class="verification-note" hidden>${icon("shield")} Round-trip verified — decrypted output matches the original.</div></section>
-      <section class="content-card sdes-trace-card"><div class="lab-heading"><div class="lab-step">02</div><div><p class="eyebrow muted-eyebrow">LIVE TRACE</p><h2>S-DES operation</h2></div></div><div id="sdes-trace-panel" class="sdes-trace-panel"></div></section>`);
+      <section class="content-card sdes-trace-card"><div class="lab-heading"><div class="lab-step">02</div><div><p class="eyebrow muted-eyebrow">LIVE TRACE</p><h2>S-DES operation</h2></div></div><div id="sdes-trace-panel" class="sdes-trace-panel"></div></section>
+      <section class="content-card sdes-demo-card"><div class="lab-heading"><div class="lab-step">03</div><div><p class="eyebrow muted-eyebrow">DEMO RECORD</p><h2>What gets encrypted</h2></div></div><div class="demo-header"><span id="demo-patient" class="demo-patient">Patient ID: loading…</span><span id="demo-demo-key" class="demo-patient">S-DES demo key: —</span></div>
+      <p class="demo-description">This demo re-encrypts the selected patient’s actual record with the lab key; the lab key is separate from the app’s local at-rest key. Each row shows the encrypted JSON field entry and its decrypted value.</p>
+      <div class="demo-table-wrap"><table class="demo-table"><thead><tr><th>Field</th><th>Plaintext</th><th>Encrypted field (HEX)</th><th>Decrypted</th></tr></thead><tbody id="demo-fields"></tbody></table></div>
+      <details class="demo-full-record"><summary>Show complete serialized record and ciphertext</summary><div class="demo-grid">
+        <div class="demo-panel"><span class="demo-heading">Plaintext patient record</span><pre id="demo-plaintext" class="demo-box mono-box"></pre></div>
+        <div class="demo-panel"><span class="demo-heading">S-DES ciphertext (HEX)</span><pre id="demo-encrypted" class="demo-box mono-box"></pre></div>
+        <div class="demo-panel"><span class="demo-heading">Decrypted record</span><pre id="demo-decrypted" class="demo-box mono-box"></pre></div>
+      </div></details>
+      <div class="demo-steps"><div class="demo-step"><span>1</span><p>Patient data is stored as a JSON object containing identity and clinical fields.</p></div><div class="demo-step"><span>2</span><p>The record is converted to bytes and encrypted with the current 10-bit S-DES key.</p></div><div class="demo-step"><span>3</span><p>On read, the same key is used to decrypt the bytes back to the original JSON.</p></div></div></section>`);
     renderSdesTrace($("#sdes-key").value);
-    $("#sdes-key").addEventListener("input", (event) => renderSdesTrace(event.target.value));
+    $("#sdes-key").addEventListener("input", (event) => {
+      renderSdesTrace(event.target.value);
+      loadSdesDemo(event.target.value, selectedPatient?.id || null);
+    });
     $("#sdes-encrypt").addEventListener("click", encryptText);
     $("#sdes-decrypt").addEventListener("click", decryptText);
+    loadSdesDemo($("#sdes-key").value, selectedPatient?.id || null);
+  }
+
+  async function loadSdesDemo(key, patientId = null) {
+    try {
+      const result = await api("/api/sdes/demo", {
+        method: "POST",
+        body: JSON.stringify({ key, patientId }),
+      });
+      $("#demo-plaintext").textContent = JSON.stringify(JSON.parse(result.plaintext), null, 2);
+      $("#demo-encrypted").textContent = result.encryptedHex;
+      $("#demo-decrypted").textContent = JSON.stringify(JSON.parse(result.decrypted), null, 2);
+      $("#demo-demo-key").textContent = `S-DES demo key: ${result.key}`;
+      $("#demo-patient").textContent = `Patient ID: ${escapeHtml(result.patientId)}`;
+      $("#demo-fields").innerHTML = result.fields.map((field) => `
+        <tr>
+          <th scope="row">${escapeHtml(field.name)}</th>
+          <td>${escapeHtml(JSON.stringify(field.plaintext))}</td>
+          <td class="demo-cipher">${escapeHtml(field.encryptedHex)}</td>
+          <td>${escapeHtml(JSON.stringify(field.decrypted))}</td>
+        </tr>`).join("");
+    } catch (error) {
+      $("#demo-plaintext").textContent = JSON.stringify({ error: error.message }, null, 2);
+      $("#demo-encrypted").textContent = "";
+      $("#demo-decrypted").textContent = "";
+      $("#demo-demo-key").textContent = "S-DES demo key: unavailable";
+      $("#demo-patient").textContent = "Patient ID: unavailable";
+      $("#demo-fields").innerHTML = `<tr><td colspan="4">${escapeHtml(error.message)}</td></tr>`;
+    }
   }
 
   async function encryptText() {

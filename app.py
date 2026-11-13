@@ -1,3 +1,4 @@
+import base64
 import hashlib
 import hmac
 import json
@@ -94,6 +95,43 @@ def _persistent_secret(path, factory=None):
     return path.read_bytes()
 
 
+def _environment_secret(name, default=None):
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    if value.startswith("base64:"):
+        try:
+            return base64.b64decode(value[7:], altchars=b"-_", validate=True)
+        except ValueError as error:
+            raise RuntimeError(
+                f"{name} must contain valid base64 after the base64: prefix."
+            ) from error
+    return value
+
+
+class DatabaseConnection:
+    def __init__(self, connection, postgres=False):
+        self.connection = connection
+        self.postgres = postgres
+
+    def execute(self, statement, parameters=()):
+        if self.postgres:
+            statement = statement.replace("?", "%s")
+        return self.connection.execute(statement, parameters)
+
+    def executescript(self, statement):
+        return self.connection.executescript(statement)
+
+    def commit(self):
+        self.connection.commit()
+
+    def rollback(self):
+        self.connection.rollback()
+
+    def close(self):
+        self.connection.close()
+
+
 def _sdes_key_for_secret(secret):
     if isinstance(secret, str):
         secret_bytes = secret.encode("utf-8")
@@ -160,32 +198,77 @@ def _validate_patient(payload, include_account=False):
 
 def create_app(test_config=None):
     app = Flask(__name__, instance_path=str(INSTANCE_DIR))
+    is_vercel = os.environ.get("VERCEL", "").lower() == "1"
+    database_url = os.environ.get("DATABASE_URL") or os.environ.get("POSTGRES_URL")
+    if is_vercel and not database_url:
+        raise RuntimeError("Set DATABASE_URL to your Neon PostgreSQL connection string on Vercel.")
+    secret_key = _environment_secret("SECRET_KEY")
+    encryption_key = _environment_secret("ENCRYPTION_KEY")
+    if is_vercel and secret_key is None:
+        raise RuntimeError("Set SECRET_KEY in the Vercel project environment variables.")
+    if is_vercel and encryption_key is None:
+        raise RuntimeError("Set ENCRYPTION_KEY in the Vercel project environment variables.")
+    if secret_key is None:
+        secret_key = _persistent_secret(INSTANCE_DIR / "session.secret")
+    if encryption_key is None:
+        encryption_key = _persistent_secret(
+            INSTANCE_DIR / "records.key", lambda: secrets.token_bytes(32)
+        )
     app.config.from_mapping(
         DATABASE=str(INSTANCE_DIR / "patients.sqlite3"),
-        SECRET_KEY=_persistent_secret(INSTANCE_DIR / "session.secret"),
-        ENCRYPTION_KEY=_persistent_secret(INSTANCE_DIR / "records.key", lambda: secrets.token_bytes(32)),
-        DEMO_DATA=os.environ.get("DEMO_DATA", "true").lower() == "true",
+        DATABASE_URL=database_url,
+        SECRET_KEY=secret_key,
+        ENCRYPTION_KEY=encryption_key,
+        DEMO_DATA=os.environ.get(
+            "DEMO_DATA", "false" if is_vercel else "true"
+        ).lower() == "true",
         JSON_SORT_KEYS=False,
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE="Lax",
-        SESSION_COOKIE_SECURE=os.environ.get("COOKIE_SECURE", "").lower() == "true",
+        SESSION_COOKIE_SECURE=os.environ.get(
+            "COOKIE_SECURE", "true" if is_vercel else ""
+        ).lower() == "true",
     )
     if test_config:
         app.config.update(test_config)
+    for name in ("SECRET_KEY", "ENCRYPTION_KEY"):
+        key = app.config[name]
+        if not isinstance(key, (str, bytes, bytearray)):
+            raise RuntimeError(f"{name} must be a string or byte key.")
+        key_bytes = key.encode("utf-8") if isinstance(key, str) else bytes(key)
+        if len(key_bytes) < 32:
+            raise RuntimeError(f"{name} must contain at least 32 bytes of key material.")
     logging.basicConfig(level=logging.INFO)
 
+    integrity_errors = (sqlite3.IntegrityError,)
+    if app.config["DATABASE_URL"]:
+        from psycopg import IntegrityError
+
+        integrity_errors += (IntegrityError,)
+
     def connect_db():
+        if app.config["DATABASE_URL"]:
+            from psycopg import connect
+            from psycopg.conninfo import make_conninfo
+            from psycopg.rows import dict_row
+
+            conninfo = make_conninfo(
+                app.config["DATABASE_URL"], sslmode="require", connect_timeout=10
+            )
+            return DatabaseConnection(
+                connect(conninfo, row_factory=dict_row), postgres=True
+            )
         connection = sqlite3.connect(app.config["DATABASE"], timeout=10)
         connection.row_factory = sqlite3.Row
         connection.execute("PRAGMA foreign_keys = ON")
-        return connection
+        return DatabaseConnection(connection)
 
     def initialize_db():
-        Path(app.config["DATABASE"]).parent.mkdir(parents=True, exist_ok=True)
+        if not app.config["DATABASE_URL"]:
+            Path(app.config["DATABASE"]).parent.mkdir(parents=True, exist_ok=True)
         connection = connect_db()
         try:
-            connection.executescript(
-                """
+            schema = """
                 CREATE TABLE IF NOT EXISTS accounts (
                     id TEXT PRIMARY KEY,
                     username TEXT NOT NULL UNIQUE,
@@ -195,10 +278,15 @@ def create_app(test_config=None):
                 );
                 CREATE TABLE IF NOT EXISTS patients (
                     id TEXT PRIMARY KEY,
-                    encrypted_record BLOB NOT NULL
+                    encrypted_record {binary_type} NOT NULL
                 );
-                """
-            )
+            """
+            if app.config["DATABASE_URL"]:
+                for statement in schema.format(binary_type="BYTEA").split(";"):
+                    if statement.strip():
+                        connection.execute(statement)
+            else:
+                connection.executescript(schema.format(binary_type="BLOB"))
             if app.config["DEMO_DATA"]:
                 _seed_demo_data(connection)
             connection.commit()
@@ -370,7 +458,7 @@ def create_app(test_config=None):
                 (account_id, username, hash_password(password), patient_id),
             )
             g.db.commit()
-        except sqlite3.IntegrityError:
+        except integrity_errors:
             g.db.rollback()
             return error("That username is already in use.")
         return jsonify(patient={"id": patient_id, **record}, username=username), 201
@@ -472,6 +560,74 @@ def create_app(test_config=None):
         except ValueError as validation_error:
             return error(str(validation_error))
         return jsonify(verified=hmac.compare_digest(encoded, recovered))
+
+    @app.post("/api/sdes/demo")
+    def sdes_demo():
+        account, denied = require_role("doctor")
+        if denied:
+            return denied
+        payload = request.get_json(silent=True) or {}
+        key = payload.get("key")
+        if not isinstance(key, str):
+            return error("The S-DES key must contain exactly 10 binary digits.")
+        try:
+            _keys(key)
+        except ValueError as validation_error:
+            return error(str(validation_error))
+        patient_id = payload.get("patientId")
+        if not isinstance(patient_id, str) or not patient_id.strip():
+            row = g.db.execute(
+                "SELECT p.id, p.encrypted_record FROM patients p "
+                "JOIN accounts a ON a.patient_id = p.id WHERE a.role = 'patient' ORDER BY p.id LIMIT 1"
+            ).fetchone()
+            if row is None:
+                return error("No patient record available for the encryption demo.", 404)
+            patient_id = row["id"]
+            encrypted_record = row["encrypted_record"]
+            record = _decrypt_patient(app.config["ENCRYPTION_KEY"], encrypted_record)
+        else:
+            row = g.db.execute(
+                "SELECT encrypted_record FROM patients WHERE id = ?", (patient_id,)
+            ).fetchone()
+            if row is None:
+                return error("Patient record not found.", 404)
+            record = _decrypt_patient(app.config["ENCRYPTION_KEY"], row["encrypted_record"])
+        plaintext = json.dumps(record, separators=(",", ":"))
+        encoded = plaintext.encode("utf-8")
+        encrypted = bytes(sdes_crypt_byte(byte, key) for byte in encoded)
+        decrypted = bytes(sdes_crypt_byte(byte, key, decrypt=True) for byte in encrypted)
+        field_details = []
+        offset = 0
+        for name, value in record.items():
+            entry = (
+                json.dumps(name, separators=(",", ":"))
+                + ":"
+                + json.dumps(value, separators=(",", ":"))
+            ).encode("utf-8")
+            entry_start = encoded.find(entry, offset)
+            if entry_start < 0:
+                raise RuntimeError(f"Could not locate patient field {name!r} in serialized record.")
+            entry_end = entry_start + len(entry)
+            encrypted_entry = encrypted[entry_start:entry_end]
+            decrypted_entry = bytes(
+                sdes_crypt_byte(byte, key, decrypt=True) for byte in encrypted_entry
+            )
+            decrypted_pair = json.loads("{" + decrypted_entry.decode("utf-8") + "}")
+            field_details.append({
+                "name": name,
+                "plaintext": value,
+                "encryptedHex": encrypted_entry.hex(),
+                "decrypted": decrypted_pair[name],
+            })
+            offset = entry_end
+        return jsonify({
+            "key": key,
+            "patientId": patient_id,
+            "encryptedHex": encrypted.hex(),
+            "plaintext": plaintext,
+            "decrypted": decrypted.decode("utf-8"),
+            "fields": field_details,
+        })
 
     @app.get("/api/performance")
     def performance():

@@ -1,9 +1,42 @@
 import base64
+import json
 import os
 import tempfile
 import unittest
+from unittest.mock import patch
 
-from app import DEMO_DOCTOR, DEMO_PATIENT, create_app, sdes_crypt_byte
+from app import (
+    DEMO_DOCTOR,
+    DEMO_PATIENT,
+    DatabaseConnection,
+    _environment_secret,
+    create_app,
+    sdes_crypt_byte,
+)
+
+
+class DatabaseConnectionTests(unittest.TestCase):
+    def test_postgres_connection_translates_sqlite_placeholders(self):
+        class FakeConnection:
+            def execute(self, statement, parameters):
+                return statement, parameters
+
+        connection = DatabaseConnection(FakeConnection(), postgres=True)
+        self.assertEqual(
+            connection.execute("SELECT id FROM accounts WHERE username = ?", ("doctor",)),
+            ("SELECT id FROM accounts WHERE username = %s", ("doctor",)),
+        )
+
+    def test_environment_secret_decodes_base64_wrapped_key_bytes(self):
+        original = b"existing-record-encryption-key-material"
+        encoded = "base64:" + base64.urlsafe_b64encode(original).decode("ascii")
+        with patch.dict(os.environ, {"TEST_KEY": encoded}):
+            self.assertEqual(_environment_secret("TEST_KEY"), original)
+
+    def test_vercel_requires_a_postgres_database_url(self):
+        with patch.dict(os.environ, {"VERCEL": "1"}, clear=True):
+            with self.assertRaisesRegex(RuntimeError, "DATABASE_URL"):
+                create_app()
 
 
 class PatientAppTests(unittest.TestCase):
@@ -75,6 +108,27 @@ class PatientAppTests(unittest.TestCase):
         finally:
             connection.close()
         self.assertNotIn(b"Maya", row[0])
+
+    def test_sdes_demo_shows_each_encrypted_and_decrypted_patient_field(self):
+        self.sign_in(DEMO_DOCTOR)
+        response = self.post("/api/sdes/demo", {"key": "1010000010"})
+        self.assertEqual(response.status_code, 200, response.get_json())
+        result = response.get_json()
+        plaintext_record = json.loads(result["plaintext"])
+        self.assertEqual(json.loads(result["decrypted"]), plaintext_record)
+        self.assertEqual({field["name"] for field in result["fields"]}, set(plaintext_record))
+        for field in result["fields"]:
+            self.assertEqual(field["plaintext"], plaintext_record[field["name"]])
+            encrypted_entry = bytes.fromhex(field["encryptedHex"])
+            decrypted_entry = bytes(
+                sdes_crypt_byte(byte, result["key"], decrypt=True)
+                for byte in encrypted_entry
+            )
+            self.assertEqual(
+                json.loads("{" + decrypted_entry.decode("utf-8") + "}"),
+                {field["name"]: field["plaintext"]},
+            )
+            self.assertEqual(field["decrypted"], field["plaintext"])
 
     def test_sdes_tools_are_doctor_only(self):
         self.sign_in(DEMO_PATIENT)
