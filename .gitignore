@@ -3,4 +3,3 @@ __pycache__/
 *.py[cod]
 instance/
 *.sqlite3
-node_modules/
